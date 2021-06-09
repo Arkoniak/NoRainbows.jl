@@ -29,4 +29,4 @@ reduce(f, (1, 2))
 
 This generate the following stacktrace (solarized colorscheme is used, you may see different result in a different colorscheme)
 
-![christmastree](images/christmas_tree.png)
+![christmastree](images/christmas_tree2.png)
