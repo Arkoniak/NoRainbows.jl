@@ -51,10 +51,25 @@ function coal(a, b, c)
     a === nothing ? b === nothing ? c : b : a
 end
 
+@Base.kwdef struct Token
+    special::Bool = false
+    val::String = ""
+    color::Color = Color()
+end
+Token(special::Bool, val::String) = Token(special, val, Color())
+const FRAME_LINE = [
+    Token(true, "frameno"),
+    Token(false, " "),
+    Token(true, "function"),
+    Token(false, " at "),
+    Token(true, "filepath"),
+]
+
 @Base.kwdef struct ArgsTypesColorMap
     nonparamtypes::Color = Color()
     paramtypemain::Color = Color()
     paramtypearg::Color = Color()
+    brackets::Color = Color()
 end
 const ARGTYPE_COLORS = Ref(ArgsTypesColorMap())
 function set_argtype_map(;
@@ -62,16 +77,24 @@ function set_argtype_map(;
     nonparamtypes = nothing,
     paramtypemain = nothing,
     paramtypearg = nothing,
+    brackets = nothing,
 )
     c = ARGTYPE_COLORS[]
     ARGTYPE_COLORS[] = ArgsTypesColorMap(;
         nonparamtypes = coal(nonparamtypes, default, c.nonparamtypes),
         paramtypemain = coal(paramtypemain, default, c.paramtypemain),
-        paramtypearg = coal(paramtypearg, default, c.paramtypearg)
+        paramtypearg = coal(paramtypearg, default, c.paramtypearg),
+        brackets = coal(brackets, default, c.brackets)
     )
 
     return nothing
 end
+
+@Base.kwdef struct TraceColorMap
+    tin::Color = Color()
+    tout::Color = Color()
+end
+const TRACE_COLORS = Ref(TraceColorMap())
 
 @Base.kwdef struct MethodParamsColorMap
     brackets::Color = Color()
@@ -200,14 +223,13 @@ end
 
 @Base.kwdef struct GlobalOptions
     reverse::Bool = false
-    linebreaks::Bool = false
     stackcolor::Color = Color()
 end
 const GLOBAL = Ref(GlobalOptions())
 
 const STACKTRACE_MODULECOLORS = [Color(), Color(), Color(), Color()]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => Color(), Core => Color())
-
+const TRACE_MODUL = Module[]
 
 printstyled(io::IO, color::Color, msg...) = printstyled(io, msg...; color = color.color, bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
 
@@ -223,15 +245,42 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
 
     printstyled(io, GLOBAL[].stackcolor, "\nStacktrace:\n")
 
-    if GLOBAL[].reverse
-        trace = reverse(trace)
+    moduls = similar(trace, Int)
+    state = 0
+    for (i, frame) in pairs(trace)
+        m = parentmodule(frame)
+        if i == 1
+            moduls[i] = m in TRACE_MODUL ? -1 : 0
+            state = moduls[i] == 0 ? 0 : 1
+        else
+            if state == 0
+                if m in TRACE_MODUL
+                    moduls[i] = -1
+                    state = 1
+                else
+                    moduls[i] = 0
+                end
+            else
+                if m in TRACE_MODUL
+                    moduls[i] = 0
+                else
+                    moduls[i - 1] = 1
+                    state = 0
+                end
+            end
+        end
     end
 
-    for (i, frame) in enumerate(trace)
-        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
+    if GLOBAL[].reverse
+        trace = reverse(trace)
+        moduls = reverse(moduls)
+    end
+
+    for (i, (frame, modultrace)) in enumerate(zip(trace, moduls))
+        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler, modultrace)
         if i < n
             println(io)
-            GLOBAL[].linebreaks && println(io)
+            # GLOBAL[].linebreaks && println(io)
         end
     end
 end
@@ -239,7 +288,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler, modultrace)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -254,10 +303,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     else
         modulecolor = Color()
     end
-    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+    print_stackframe(io, i, frame, n, digit_align_width, modulecolor, modultrace)
 end
 
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor, modultrace)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
@@ -271,40 +320,50 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
-    # frame number
-    printstyled(io, FRAME_COLORS[].frameno, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
-    printstyled(io, FRAME_COLORS[].frameno, " ")
+    for token in FRAME_LINE
+        if !token.special
+            printstyled(io, token.color, token.val)
+        elseif token.val == "frameno"
+            # frame number
+            color = if modultrace == 1
+                TRACE_COLORS[].tin
+            elseif modultrace == -1
+                TRACE_COLORS[].tout
+            else
+                FRAME_COLORS[].frameno
+            end
+            printstyled(io, color, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+        elseif token.val == "function"
+            show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+            if n > 1
+                printstyled(io, FRAME_COLORS[].repeats, " (repeats $n times)")
+            end
+        elseif token.val == "filepath"
+            # filepath
+            pathparts = splitpath(file)
+            folderparts = pathparts[1:end-1]
+            if !isempty(folderparts)
+                printstyled(io, FRAME_COLORS[].filepath, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"))
+            end
 
-    show_spec_linfo(IOContext(io, :backtrace=>true), frame)
-    if n > 1
-        printstyled(io, FRAME_COLORS[].repeats, " (repeats $n times)")
+            # filename, separator, line
+            # use escape codes for formatting, printstyled can't do underlined and color
+            # codes are bright black (90) and underlined (4)
+            printstyled(io, FRAME_COLORS[].filepath, pathparts[end])
+            printstyled(io, FRAME_COLORS[].colon, ":")
+            printstyled(io, FRAME_COLORS[].lineno, line)
+
+            # inlined
+            printstyled(io, FRAME_COLORS[].inlined, inlined ? " [inlined]" : "")
+        elseif token.val == "module"
+            # module
+            if modul !== nothing
+                printstyled(io, modulecolor, modul, " ")
+            end
+        end
     end
-    println(io)
-
-    # @
-    printstyled(io, FRAME_COLORS[].dog, " " ^ (digit_align_width + 2) * "@ ")
-
-    # module
-    if modul !== nothing
-        printstyled(io, modulecolor, modul, " ")
-    end
-
-    # filepath
-    pathparts = splitpath(file)
-    folderparts = pathparts[1:end-1]
-    if !isempty(folderparts)
-        printstyled(io, FRAME_COLORS[].filepath, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"))
-    end
-
-    # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    printstyled(io, FRAME_COLORS[].filepath, pathparts[end])
-    printstyled(io, FRAME_COLORS[].colon, ":")
-    printstyled(io, FRAME_COLORS[].lineno, line)
-
-    # inlined
-    printstyled(io, FRAME_COLORS[].inlined, inlined ? " [inlined]" : "")
+    # # @
+    # printstyled(io, FRAME_COLORS[].dog, " " ^ (digit_align_width + 2) * "@ ")
 end
 
 function show_spec_linfo(io::IO, frame::StackFrame)
@@ -348,7 +407,6 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         printstyled(io, SPECLINFO_COLORS[].toplevel, "top-level scope")
     end
 end
-
 
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
                             demangle=false, kwargs=nothing, argnames=nothing,
@@ -435,7 +493,9 @@ function print_type_stacktrace(io, type; color=:normal)
         printstyled(io, ARGTYPE_COLORS[].nonparamtypes, str)
     else
         printstyled(io, ARGTYPE_COLORS[].paramtypemain, str[1:prevind(str,i)])
-        printstyled(io, ARGTYPE_COLORS[].paramtypearg, str[i:end])
+        printstyled(io, ARGTYPE_COLORS[].brackets, "{")
+        printstyled(io, ARGTYPE_COLORS[].paramtypearg, str[i+1:end-1])
+        printstyled(io, ARGTYPE_COLORS[].brackets, "}")
     end
 end
 
