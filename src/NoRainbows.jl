@@ -17,13 +17,17 @@ using Base.StackTraces: top_level_scope_sym
 end
 
 function Color(s::AbstractString)
+    return Color(split(s, ":"))
+end
+
+function Color(v::Vector)
     bold = false
     underline = false
     blink = false
     reverse = false
     hidden = false
     color = :normal
-    for item in split(s, ":")
+    for item in v
         if item == "bold"
             bold = true
         elseif item == "underline"
@@ -56,7 +60,19 @@ end
     val::String = ""
     color::Color = Color()
 end
-Token(special::Bool, val::String) = Token(special, val, Color())
+Token(special::Bool, val::AbstractString) = Token(special, val, Color())
+function Token(s::AbstractString)
+    if s in ["frameno", "function", "filepath", "module"]
+        return Token(true, s)
+    end
+    v = split(s, r"(?<!\\):")
+    if length(v) > 1
+        return Token(false, v[1], Color(v[2:end]))
+    else
+        return Token(false, v[1])
+    end
+end
+
 const FRAME_LINE = [
     Token(true, "frameno"),
     Token(false, " "),
@@ -64,6 +80,32 @@ const FRAME_LINE = [
     Token(false, " at "),
     Token(true, "filepath"),
 ]
+function format_frameline(s::AbstractString, level = 0, tokens = Token[])
+    i = 0
+    while i < ncodeunits(s)
+        i = nextind(s, i)
+        c = s[i]
+        if c == '{' && level == 0
+            i > 1 && push!(tokens, Token(s[1:prevind(s, i)]))
+            format_frameline(s[nextind(s, i):end], 1, tokens)
+            break
+        end
+
+        if c == '}' && level == 1
+            push!(tokens, Token(s[1:prevind(s, i)]))
+            format_frameline(s[nextind(s, i):end], 0, tokens)
+            break
+        end
+    end
+
+    isempty(tokens) && return nothing
+    empty!(FRAME_LINE)
+    for token in tokens
+        push!(FRAME_LINE, token)
+    end
+
+    return nothing
+end
 
 @Base.kwdef struct ArgsTypesColorMap
     nonparamtypes::Color = Color()
@@ -229,12 +271,11 @@ const GLOBAL = Ref(GlobalOptions())
 
 const STACKTRACE_MODULECOLORS = [Color(), Color(), Color(), Color()]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => Color(), Core => Color())
-const TRACE_MODUL = Module[]
+const TRACK_MODUL = Module[]
 
 printstyled(io::IO, color::Color, msg...) = printstyled(io, msg...; color = color.color, bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
 
 showstyled(io::IO, color::Color, msg...) = with_output_color(show, color.color, io, msg...; bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
-
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = true)
     n = length(trace)
@@ -250,18 +291,18 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
     for (i, frame) in pairs(trace)
         m = parentmodule(frame)
         if i == 1
-            moduls[i] = m in TRACE_MODUL ? -1 : 0
+            moduls[i] = m in TRACK_MODUL ? -1 : 0
             state = moduls[i] == 0 ? 0 : 1
         else
             if state == 0
-                if m in TRACE_MODUL
+                if m in TRACK_MODUL
                     moduls[i] = -1
                     state = 1
                 else
                     moduls[i] = 0
                 end
             else
-                if m in TRACE_MODUL
+                if m in TRACK_MODUL
                     moduls[i] = 0
                 else
                     moduls[i - 1] = 1
