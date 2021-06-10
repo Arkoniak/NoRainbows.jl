@@ -393,15 +393,15 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                         kwnames[i] = Symbol(str[1:end-3])
                     end
                 end
-                Base.show_tuple_as_call(io, def.name, pos_sig;
+                show_tuple_as_call(io, def.name, pos_sig;
                                         demangle=true,
                                         kwargs=zip(kwnames, kwarg_types),
                                         argnames=argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+                show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
             end
         else
-            Base.show_mi(io, linfo, true)
+            show_mi(io, linfo, true)
         end
     elseif linfo isa CodeInfo
         printstyled(io, SPECLINFO_COLORS[].toplevel, "top-level scope")
@@ -445,7 +445,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
         printstyled(io, TUPLE_CALL_COLORS[].semicolon, "; ")
         first = true
         for (k, t) in kwargs
-            first || print(io, TUPLE_CALL_COLORS[].comma, ", ")
+            first || printstyled(io, TUPLE_CALL_COLORS[].comma, ", ")
             first = false
             print_within_stacktrace(io, TUPLE_CALL_COLORS[].kwargs, k)
             printstyled(io, TUPLE_CALL_COLORS[].doublecolon, "::")
