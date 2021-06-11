@@ -324,6 +324,31 @@ function track_modules(moduls...)
     return nothing
 end
 
+function set_solarized()
+    set_framecolor_map(default = "normal", frameno = "normal", lineno = "cyan")
+    set_signature_map(default = "blue")
+    set_tuplecall_map(default = "normal", doublecolon = "green")
+    set_speclinfo_map(default = "blue")
+    set_argtype_map(default = "yellow", brackets = "normal")
+
+    set_track_map(trackin = "cyan:reverse", trackout = "red:reverse")
+    set_globals(stackcolor = "underline")
+
+    format_frameline("{frameno} {module}{filepath}\n{function}")
+end
+
+function set_theme(theme)
+    if theme == "solarized"
+        set_solarized()
+    elseif theme == "solarized_reversed"
+        set_solarized()
+        set_globals(reverse = true)
+    else
+        @warn "Unknown theme $theme"
+    end
+    return nothing
+end
+
 printstyled(io::IO, color::Color, msg...) = printstyled(io, msg...; color = color.color, bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
 
 showstyled(io::IO, color::Color, msg...) = with_output_color(show, color.color, io, msg...; bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
