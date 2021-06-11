@@ -20,6 +20,8 @@ function Color(s::AbstractString)
     return Color(split(s, ":"))
 end
 
+Color(c::Color) = c
+
 function Color(v::Vector)
     bold = false
     underline = false
@@ -123,20 +125,33 @@ function set_argtype_map(;
 )
     c = ARGTYPE_COLORS[]
     ARGTYPE_COLORS[] = ArgsTypesColorMap(;
-        nonparamtypes = coal(nonparamtypes, default, c.nonparamtypes),
-        paramtypemain = coal(paramtypemain, default, c.paramtypemain),
-        paramtypearg = coal(paramtypearg, default, c.paramtypearg),
-        brackets = coal(brackets, default, c.brackets)
+        nonparamtypes = Color(coal(nonparamtypes, default, c.nonparamtypes)),
+        paramtypemain = Color(coal(paramtypemain, default, c.paramtypemain)),
+        paramtypearg = Color(coal(paramtypearg, default, c.paramtypearg)),
+        brackets = Color(coal(brackets, default, c.brackets))
     )
 
     return nothing
 end
 
-@Base.kwdef struct TraceColorMap
+@Base.kwdef struct TrackColorMap
     tin::Color = Color()
     tout::Color = Color()
 end
-const TRACE_COLORS = Ref(TraceColorMap())
+const TRACK_COLORS = Ref(TrackColorMap())
+function set_track_map(;
+    default = nothing,
+    trackin = nothing,
+    trackout = nothing
+)
+    c = TRACK_COLORS[]
+    TRACK_COLORS[] = TrackColorMap(;
+        tin = Color(coal(trackin, default, c.tin)),
+        tout = Color(coal(trackout, default, c.tout))
+    )
+
+    return nothing
+end
 
 @Base.kwdef struct MethodParamsColorMap
     brackets::Color = Color()
@@ -145,6 +160,21 @@ const TRACE_COLORS = Ref(TraceColorMap())
     types::Color = Color()
 end
 const METHODPARAMS_COLORS = Ref(MethodParamsColorMap())
+function set_methodparams_map(;
+    default = nothing,
+    brackets = nothing,
+    wher = nothing,
+    types = nothing
+)
+    c = METHODPARAMS_COLORS[]
+    METHODPARAMS_COLORS[] = MethodParamsColorMap(;
+        brackets = Color(coal(brackets, default, c.brackets)),
+        wher = Color(coal(wher, default, c.wher)),
+        types = Color(coal(types, default, c.types))
+    )
+
+    return nothing
+end
 
 @Base.kwdef struct SignatureFunctionColorMap
     modulename::Color = Color()
@@ -164,11 +194,11 @@ function set_signature_map(;
 )
     c = SIGNATURE_FUNCTION_COLORS[]
     SIGNATURE_FUNCTION_COLORS[] = SignatureFunctionColorMap(
-        modulename = coal(modulename, default, c.modulename),
-        funcname = coal(funcname, default, c.funcname),
-        brackets = coal(brackets, default, c.brackets),
-        wrapper = coal(wrapper, default, c.wrapper),
-        fallback = coal(fallback, default, c.fallback)
+        modulename = Color(coal(modulename, default, c.modulename)),
+        funcname = Color(coal(funcname, default, c.funcname)),
+        brackets = Color(coal(brackets, default, c.brackets)),
+        wrapper = Color(coal(wrapper, default, c.wrapper)),
+        fallback = Color(coal(fallback, default, c.fallback))
     )
 
     return nothing
@@ -196,13 +226,13 @@ function set_tuplecall_map(;
 )
     c = TUPLE_CALL_COLORS[]
     TUPLE_CALL_COLORS[] = TupleCallColorMap(
-        tuple = coal(tuple, default, c.tuple),
-        brackets = coal(brackets, default, c.brackets),
-        doublecolon = coal(doublecolon, default, c.doublecolon),
-        comma = coal(comma, default, c.comma),
-        semicolon = coal(semicolon, default, c.semicolon),
-        args = coal(args, default, c.args),
-        kwargs = coal(kwargs, default, c.kwargs)
+        tuple = Color(coal(tuple, default, c.tuple)),
+        brackets = Color(coal(brackets, default, c.brackets)),
+        doublecolon = Color(coal(doublecolon, default, c.doublecolon)),
+        comma = Color(coal(comma, default, c.comma)),
+        semicolon = Color(coal(semicolon, default, c.semicolon)),
+        args = Color(coal(args, default, c.args)),
+        kwargs = Color(coal(kwargs, default, c.kwargs))
     )
 
     return nothing
@@ -222,9 +252,9 @@ function set_speclinfo_map(;
 )
     c = SPECLINFO_COLORS[]
     SPECLINFO_COLORS[] = SpecLinfoColorMap(
-        ipx = coal(ipx, default, c.ipx),
-        toplevel = coal(toplevel, default, c.toplevel),
-        framefunc = coal(framefunc, default, c.framefunc)
+        ipx = Color(coal(ipx, default, c.ipx)),
+        toplevel = Color(coal(toplevel, default, c.toplevel)),
+        framefunc = Color(coal(framefunc, default, c.framefunc))
     )
 
     return nothing
@@ -252,14 +282,15 @@ function set_framecolor_map(;
 )
     c = FRAME_COLORS[]
     FRAME_COLORS[] = FrameColorMap(
-        frameno = coal(frameno, default, c.frameno),
-        repeats = coal(repeats, default, c.repeats),
-        dog = coal(dog, default, c.dog),
-        filepath = coal(filepath, default, c.filepath),
-        colon = coal(colon, default, c.colon),
-        lineno = coal(lineno, default, c.lineno),
-        inlined = coal(inlined, default, c.inlined)
+        frameno = Color(coal(frameno, default, c.frameno)),
+        repeats = Color(coal(repeats, default, c.repeats)),
+        dog = Color(coal(dog, default, c.dog)),
+        filepath = Color(coal(filepath, default, c.filepath)),
+        colon = Color(coal(colon, default, c.colon)),
+        lineno = Color(coal(lineno, default, c.lineno)),
+        inlined = Color(coal(inlined, default, c.inlined))
     )
+
     return nothing
 end
 
@@ -268,10 +299,30 @@ end
     stackcolor::Color = Color()
 end
 const GLOBAL = Ref(GlobalOptions())
+function set_globals(;
+    reverse = nothing,
+    stackcolor = nothing
+)
+    c = GLOBAL[]
+    col = Color(stackcolor === nothing ? c.stackcolor : stackcolor)
+    rev = reverse === nothing ? c.reverse : reverse
+
+    GLOBAL[] = GlobalOptions(rev, col)
+
+    return nothing
+end
 
 const STACKTRACE_MODULECOLORS = [Color(), Color(), Color(), Color()]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => Color(), Core => Color())
 const TRACK_MODUL = Module[]
+function track_modules(moduls...)
+    empty!(TRACK_MODUL)
+    for modul in moduls
+        push!(TRACK_MODUL, modul)
+    end
+
+    return nothing
+end
 
 printstyled(io::IO, color::Color, msg...) = printstyled(io, msg...; color = color.color, bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
 
@@ -287,7 +338,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
     printstyled(io, GLOBAL[].stackcolor, "\nStacktrace:\n")
 
     moduls = similar(trace, Int)
-    state = 0
+    state = 0 # are we inside tracked module or not
     for (i, frame) in pairs(trace)
         m = parentmodule(frame)
         if i == 1
@@ -306,6 +357,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
                     moduls[i] = 0
                 else
                     moduls[i - 1] = 1
+                    moduls[i] = 0
                     state = 0
                 end
             end
@@ -317,8 +369,8 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
         moduls = reverse(moduls)
     end
 
-    for (i, (frame, modultrace)) in enumerate(zip(trace, moduls))
-        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler, modultrace)
+    for (i, (frame, modultrack)) in enumerate(zip(trace, moduls))
+        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler, modultrack)
         if i < n
             println(io)
             # GLOBAL[].linebreaks && println(io)
@@ -329,7 +381,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler, modultrace)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler, modultrack)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -344,10 +396,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     else
         modulecolor = Color()
     end
-    print_stackframe(io, i, frame, n, digit_align_width, modulecolor, modultrace)
+    print_stackframe(io, i, frame, n, digit_align_width, modulecolor, modultrack)
 end
 
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor, modultrace)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor, modultrack)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
@@ -366,10 +418,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
             printstyled(io, token.color, token.val)
         elseif token.val == "frameno"
             # frame number
-            color = if modultrace == 1
-                TRACE_COLORS[].tin
-            elseif modultrace == -1
-                TRACE_COLORS[].tout
+            color = if modultrack == 1
+                TRACK_COLORS[].tin
+            elseif modultrack == -1
+                TRACK_COLORS[].tout
             else
                 FRAME_COLORS[].frameno
             end
