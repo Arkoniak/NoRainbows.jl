@@ -61,17 +61,30 @@ end
     special::Bool = false
     val::String = ""
     color::Color = Color()
+    align::Int = 0
 end
-Token(special::Bool, val::AbstractString) = Token(special, val, Color())
+Token(special::Bool, val::AbstractString) = Token(special, val, Color(), 0)
+Token(special::Bool, val::AbstractString, color::Color) = Token(special, val, color, 0)
 function Token(s::AbstractString)
-    if s in ["frameno", "function", "filepath", "module"]
+    if s in ["function", "filepath", "module"]
         return Token(true, s)
     end
     v = split(s, r"(?<!\\):")
-    if length(v) > 1
-        return Token(false, v[1], Color(v[2:end]))
-    else
+    if v[1] == "frameno"
+        if length(v) == 1
+            return Token(true, s)
+        else
+            align = v[2] == "lalign" ? -1 : 1
+            return Token(true, v[1], Color(), align)
+        end
+    end
+    if length(v) == 1
         return Token(false, v[1])
+    elseif v[2] in ["lalign", "ralign"]
+        align = v[2] == "lalign" ? -1 : 1
+        return Token(false, v[1], Color(v[3:end]), align)
+    else
+        return Token(false, v[1], Color(v[2:end]))
     end
 end
 
@@ -334,7 +347,7 @@ function set_solarized()
     set_track_map(trackin = "cyan:reverse", trackout = "red:reverse")
     set_globals(stackcolor = "underline")
 
-    format_frameline("{frameno} {module}{filepath}\n{function}")
+    format_frameline("{frameno:lalign} {module}{filepath}\n  {function}")
 end
 
 function set_theme(theme)
@@ -440,7 +453,15 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
 
     for token in FRAME_LINE
         if !token.special
-            printstyled(io, token.color, token.val)
+            if token.align == 0
+                printstyled(io, token.color, token.val)
+            else
+                if token.align == -1
+                    printstyled(io, token.color, rpad(token.val, digit_align_width + 2))
+                else
+                    printstyled(io, token.color, lpad(token.val, digit_align_width + 2))
+                end
+            end
         elseif token.val == "frameno"
             # frame number
             color = if modultrack == 1
@@ -450,7 +471,14 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
             else
                 FRAME_COLORS[].frameno
             end
-            printstyled(io, color, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+
+            if token.align == 0
+                printstyled(io, color, "[", string(i), "]")
+            elseif token.align == 1
+                printstyled(io, color, lpad("[" * string(i) * "]", digit_align_width + 2))
+            else
+                printstyled(io, color, rpad("[" * string(i) * "]", digit_align_width + 2))
+            end
         elseif token.val == "function"
             show_spec_linfo(IOContext(io, :backtrace=>true), frame)
             if n > 1
