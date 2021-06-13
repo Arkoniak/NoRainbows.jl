@@ -4,7 +4,7 @@ import Base: print_stackframe, show_tuple_as_call, print_type_stacktrace, prints
 import Base.StackTraces: show_spec_linfo
 
 using Core: MethodInstance, CodeInfo
-using Base: StackFrame, stacktrace_expand_basepaths, stacktrace_contract_userdir, contractuser, unwrap_unionall, demangle_function_name, show_sym, parentmodule, empty_sym, text_colors, disable_text_style
+using Base: StackFrame, stacktrace_expand_basepaths, stacktrace_contract_userdir, contractuser, unwrap_unionall, demangle_function_name, show_sym, parentmodule, empty_sym, text_colors, disable_text_style, is_exported_from_stdlib
 using Base.StackTraces: top_level_scope_sym
 
 @Base.kwdef struct Color
