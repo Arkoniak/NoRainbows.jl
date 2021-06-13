@@ -1,11 +1,11 @@
 module NoRainbows
 
-import Base: print_stackframe, show_tuple_as_call, print_type_stacktrace, printstyled, print_within_stacktrace, show_method_params, show_signature_function, show_full_backtrace, with_output_color
+import Base: print_stackframe, show_tuple_as_call, print_type_stacktrace, printstyled, print_within_stacktrace, show_method_params, show_signature_function, show_full_backtrace, with_output_color, showerror, show_backtrace
 import Base.StackTraces: show_spec_linfo
 
 using Core: MethodInstance, CodeInfo
-using Base: StackFrame, stacktrace_expand_basepaths, stacktrace_contract_userdir, contractuser, unwrap_unionall, demangle_function_name, show_sym, parentmodule, empty_sym, text_colors, disable_text_style, is_exported_from_stdlib
-using Base.StackTraces: top_level_scope_sym
+using Base: StackFrame, stacktrace_expand_basepaths, stacktrace_contract_userdir, contractuser, unwrap_unionall, demangle_function_name, show_sym, parentmodule, empty_sym, text_colors, disable_text_style, is_exported_from_stdlib, process_backtrace, BIG_STACKTRACE_SIZE, stacktrace_linebreaks
+using Base.StackTraces: top_level_scope_sym, is_top_level_frame
 
 @Base.kwdef struct Color
     color::Union{Symbol, Int} = :normal
@@ -366,7 +366,50 @@ printstyled(io::IO, color::Color, msg...) = printstyled(io, msg...; color = colo
 
 showstyled(io::IO, color::Color, msg...) = with_output_color(show, color.color, io, msg...; bold = color.bold, underline = color.underline, blink = color.blink, reverse = color.reverse, hidden = color.hidden)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = true)
+function showerror(io::IO, ex::MethodError, bt; backtrace=true)
+    try
+        showerror(io, ex)
+    finally
+        f = ex.f
+        ft = typeof(f)
+        backtrace && show_backtrace(io, bt; modul = ft.name.module)
+    end
+end
+
+function show_backtrace(io::IO, t::Vector; modul = nothing)
+    if haskey(io, :last_shown_line_infos)
+        empty!(io[:last_shown_line_infos])
+    end
+
+    # t is a pre-processed backtrace (ref #12856)
+    if t isa Vector{Any}
+        filtered = t
+    else
+        filtered = process_backtrace(t)
+    end
+    isempty(filtered) && return
+
+    if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
+        f = filtered[1][1]::StackFrame
+        if f.line == 0 && f.file === Symbol("")
+            # don't show a single top-level frame with no location info
+            return
+        end
+    end
+
+    if length(filtered) > BIG_STACKTRACE_SIZE
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
+        return
+    end
+
+    try invokelatest(update_stackframes_callback[], filtered) catch end
+    # process_backtrace returns a Vector{Tuple{Frame, Int}}
+    frames = map(x->first(x)::StackFrame, filtered)
+    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks(), modul = modul)
+    return
+end
+
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = true, modul = nothing)
     n = length(trace)
     ndigits_max = ndigits(n)
 
@@ -377,21 +420,22 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool = tru
 
     moduls = similar(trace, Int)
     state = 0 # are we inside tracked module or not
+    tracks = modul === nothing ? TRACK_MODUL : [modul]
     for (i, frame) in pairs(trace)
         m = parentmodule(frame)
         if i == 1
-            moduls[i] = m in TRACK_MODUL ? -1 : 0
+            moduls[i] = m in tracks ? -1 : 0
             state = moduls[i] == 0 ? 0 : 1
         else
             if state == 0
-                if m in TRACK_MODUL
+                if m in tracks
                     moduls[i] = -1
                     state = 1
                 else
                     moduls[i] = 0
                 end
             else
-                if m in TRACK_MODUL
+                if m in tracks
                     moduls[i] = 0
                 else
                     moduls[i - 1] = 1
