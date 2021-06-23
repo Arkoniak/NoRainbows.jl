@@ -12,7 +12,6 @@ makedocs(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://Arkoniak.github.io/NoRainbows.jl",
         siteurl="https://github.com/Arkoniak/NoRainbows.jl",
-        assets=String[],
     ),
     pages=[
         "Home" => "index.md",
