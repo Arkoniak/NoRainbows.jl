@@ -15,7 +15,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
-        "Frameline format" => "frameline.md"
+        "Reverse stacktrace" => "reverse.md",
+        "Frameline format" => "frameline.md",
     ],
 )
 
