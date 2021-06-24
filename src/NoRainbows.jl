@@ -276,7 +276,6 @@ end
 @Base.kwdef struct FrameColorMap
     frameno::Color = Color()
     repeats::Color = Color()
-    dog::Color = Color()
     filepath::Color = Color()
     colon::Color = Color()
     lineno::Color = Color()
@@ -287,7 +286,6 @@ function set_framecolor_map(;
     default = nothing,
     frameno = nothing,
     repeats = nothing,
-    dog = nothing,
     filepath = nothing,
     colon = nothing,
     lineno = nothing,
@@ -297,7 +295,6 @@ function set_framecolor_map(;
     FRAME_COLORS[] = FrameColorMap(
         frameno = Color(coal(frameno, default, c.frameno)),
         repeats = Color(coal(repeats, default, c.repeats)),
-        dog = Color(coal(dog, default, c.dog)),
         filepath = Color(coal(filepath, default, c.filepath)),
         colon = Color(coal(colon, default, c.colon)),
         lineno = Color(coal(lineno, default, c.lineno)),
@@ -335,6 +332,62 @@ function track_modules(moduls...)
     end
 
     return nothing
+end
+
+function set_framenumber(;
+        frameno = nothing,
+    )
+    set_framecolor_map(; frameno = frameno)
+end
+
+"""
+    set_filepath(;
+        default = nothing,
+        filepath = nothing,
+        colon = nothing,
+        lineno = nothing,
+        inlined = nothing
+    )
+
+Set color attributes of the filepath which generate corresponding frameline.
+"""
+function set_filepath(;
+    default = nothing,
+    filepath = nothing,
+    colon = nothing,
+    lineno = nothing,
+    inlined = nothing
+)
+    c = FRAME_COLORS[]
+    filepath = Color(coal(filepath, default, c.filepath))
+    colon = Color(coal(colon, default, c.colon))
+    lineno = Color(coal(lineno, default, c.lineno))
+    inlined = Color(coal(inlined, default, c.inlined))
+
+    FRAME_COLORS[] = FrameColorMap(
+        filepath = filepath,
+        colon = colon,
+        lineno = lineno,
+        inlined = inlined
+    )
+end
+
+get_module_fixed() = STACKTRACE_FIXEDCOLORS
+function set_module_fixed(d)
+    empty!(STACKTRACE_FIXEDCOLORS)
+    for (k, v) in d
+        STACKTRACE_FIXEDCOLORS[k] = Color(v)
+    end
+end
+
+get_module_rotating() = STACKTRACE_MODULECOLORS
+function set_module_rotating(v)
+    empty!(STACKTRACE_MODULECOLORS)
+    for x in v
+        push!(STACKTRACE_MODULECOLORS, Color(x))
+    end
+
+    nothing
 end
 
 function set_solarized()
@@ -552,8 +605,6 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
             end
         end
     end
-    # # @
-    # printstyled(io, FRAME_COLORS[].dog, " " ^ (digit_align_width + 2) * "@ ")
 end
 
 function show_spec_linfo(io::IO, frame::StackFrame)

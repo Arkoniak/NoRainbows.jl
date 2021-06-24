@@ -15,7 +15,7 @@ Intermediate text usually go as it is, but it can be enclosed in curly brackets 
 
 ### Filepath based
 
-```
+```julia
 NoRainbows.format_frameline("{frameno:lalign} {module}{filepath}\n  {function}")
 ```
 
@@ -23,7 +23,7 @@ NoRainbows.format_frameline("{frameno:lalign} {module}{filepath}\n  {function}")
 
 ### Julia 1.6
 
-```
+```julia
 NoRainbows.format_frameline(" {frameno:ralign} {function}\n {@:ralign:light_black} {module}{filepath}")
 ```
 
@@ -31,7 +31,7 @@ NoRainbows.format_frameline(" {frameno:ralign} {function}\n {@:ralign:light_blac
 
 ### Julia 1.5
 
-```
+```julia
 NoRainbows.format_frameline("{frameno} {function} at {filepath}")
 ```
 

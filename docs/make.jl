@@ -15,6 +15,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Colors" => "colors.md",
+        "Colorschemes" => "colorschemes.md",
         "Reverse stacktrace" => "reverse.md",
         "Frameline format" => "frameline.md",
     ],
