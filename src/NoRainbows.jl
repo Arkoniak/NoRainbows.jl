@@ -1,126 +1,15 @@
 module NoRainbows
 
-import Base: print_stackframe, show_tuple_as_call, print_type_stacktrace, printstyled, print_within_stacktrace, show_method_params, show_signature_function, show_full_backtrace, with_output_color, showerror, show_backtrace
+import Base: print_stackframe, show_tuple_as_call, print_type_stacktrace, print_within_stacktrace, show_method_params, show_signature_function, show_full_backtrace, printstyled, with_output_color, showerror, show_backtrace
 import Base.StackTraces: show_spec_linfo
 
 using Core: MethodInstance, CodeInfo
 using Base: StackFrame, stacktrace_expand_basepaths, stacktrace_contract_userdir, contractuser, unwrap_unionall, demangle_function_name, show_sym, parentmodule, empty_sym, text_colors, disable_text_style, is_exported_from_stdlib, process_backtrace, BIG_STACKTRACE_SIZE, stacktrace_linebreaks
 using Base.StackTraces: top_level_scope_sym, is_top_level_frame
 
-@Base.kwdef struct Color
-    color::Union{Symbol, Int} = :normal
-    bold::Bool = false
-    underline::Bool = false
-    blink::Bool = false
-    reverse::Bool = false
-    hidden::Bool = false
-end
-
-function Color(s::AbstractString)
-    return Color(split(s, ":"))
-end
-
-Color(c::Color) = c
-
-function Color(v::Vector)
-    bold = false
-    underline = false
-    blink = false
-    reverse = false
-    hidden = false
-    color = :normal
-    for item in v
-        if item == "bold"
-            bold = true
-        elseif item == "underline"
-            underline = true
-        elseif item == "blink"
-            blink = true
-        elseif item == "reverse"
-            reverse = true
-        elseif item == "hidden"
-            hidden = true
-        elseif !isempty(item)
-            val = tryparse(Int, item)
-            if val === nothing
-                color = Symbol(item)
-            else
-                color = val
-            end
-        end
-    end
-
-    return Color(color, bold, underline, blink, reverse, hidden)
-end
-
-function coal(a, b, c)
-    a === nothing ? b === nothing ? c : b : a
-end
-
-@Base.kwdef struct Token
-    special::Bool = false
-    val::String = ""
-    color::Color = Color()
-    align::Int = 0
-end
-Token(special::Bool, val::AbstractString) = Token(special, val, Color(), 0)
-Token(special::Bool, val::AbstractString, color::Color) = Token(special, val, color, 0)
-function Token(s::AbstractString)
-    if s in ["function", "filepath", "module"]
-        return Token(true, s)
-    end
-    v = split(s, r"(?<!\\):")
-    if v[1] == "frameno"
-        if length(v) == 1
-            return Token(true, s)
-        else
-            align = v[2] == "lalign" ? -1 : 1
-            return Token(true, v[1], Color(), align)
-        end
-    end
-    if length(v) == 1
-        return Token(false, v[1])
-    elseif v[2] in ["lalign", "ralign"]
-        align = v[2] == "lalign" ? -1 : 1
-        return Token(false, v[1], Color(v[3:end]), align)
-    else
-        return Token(false, v[1], Color(v[2:end]))
-    end
-end
-
-const FRAME_LINE = [
-    Token(true, "frameno"),
-    Token(false, " "),
-    Token(true, "function"),
-    Token(false, " at "),
-    Token(true, "filepath"),
-]
-function format_frameline(s::AbstractString, level = 0, tokens = Token[])
-    i = 0
-    while i < ncodeunits(s)
-        i = nextind(s, i)
-        c = s[i]
-        if c == '{' && level == 0
-            i > 1 && push!(tokens, Token(s[1:prevind(s, i)]))
-            format_frameline(s[nextind(s, i):end], 1, tokens)
-            break
-        end
-
-        if c == '}' && level == 1
-            push!(tokens, Token(s[1:prevind(s, i)]))
-            format_frameline(s[nextind(s, i):end], 0, tokens)
-            break
-        end
-    end
-
-    isempty(tokens) && return nothing
-    empty!(FRAME_LINE)
-    for token in tokens
-        push!(FRAME_LINE, token)
-    end
-
-    return nothing
-end
+include("colors.jl")
+include("pkg_colormap.jl")
+include("frameline.jl")
 
 @Base.kwdef struct ArgsTypesColorMap
     nonparamtypes::Color = Color()
@@ -817,5 +706,24 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
         end
     end
 end
+
+"""
+    printstyled([io], xs...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
+
+Print `xs` in a color specified as a symbol or integer, optionally in bold.
+
+`color` may take any of the values $(Base.available_text_colors_docstring)
+or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
+If the keyword `bold` is given as `true`, the result will be printed in bold.
+If the keyword `underline` is given as `true`, the result will be printed underlined.
+If the keyword `blink` is given as `true`, the result will blink.
+If the keyword `reverse` is given as `true`, the result will have foreground and background colors inversed.
+If the keyword `hidden` is given as `true`, the result will be hidden.
+Keywords can be given in any combination.
+"""
+printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
+printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 end # module
